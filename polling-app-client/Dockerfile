@@ -1,39 +1,23 @@
-#### Stage 1: Build the react application
-FROM node:12.4.0-alpine as build
+FROM openjdk:8-jdk-alpine
 
-# Configure the main working directory inside the docker image. 
-# This is the base directory used in any further RUN, COPY, and ENTRYPOINT 
-# commands.
+MAINTAINER cnych <icnych@gmail.com>
+
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+ENV TZ=Asia/Shanghai
+
+RUN mkdir /app
+
 WORKDIR /app
 
-# Copy the package.json as well as the package-lock.json and install 
-# the dependencies. This is a separate step so the dependencies 
-# will be cached unless changes to one of those two files 
-# are made.
-COPY package.json package-lock.json ./
-RUN npm install
+# 我们是在jenkins的pipeline中去进行镜像构建的，这个时候项目中，并没有打包好的jar包，怎么处理？
+# 两种方法：
+# 1. docker的多阶段构建，适用于docker 17。06以上的版本
+# 2. 在pipeline中添加一个maven构建的阶段，然后在docker构建的阶段就可以直接获取到jar包了，本次采用这种方式
+COPY target/polls-0.0.1-SNAPSHOT.jar /app/polls.jar
 
-# Copy the main application
-COPY . ./
+EXPOSE 8080
 
-# Arguments
-ARG REACT_APP_API_BASE_URL
-ENV REACT_APP_API_BASE_URL=${REACT_APP_API_BASE_URL}
 
-# Build the application
-RUN npm run build
-
-#### Stage 2: Serve the React application from Nginx 
-FROM nginx:1.17.0-alpine
-
-# Copy the react build from Stage 1
-COPY --from=build /app/build /var/www
-
-# Copy our custom nginx config
-COPY nginx.conf /etc/nginx/nginx.conf
-
-# Expose port 3000 to the Docker host, so we can access it 
-# from the outside.
-EXPOSE 80
-
-ENTRYPOINT ["nginx","-g","daemon off;"]
+ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-jar","/app/polls.jar"]
